@@ -22,10 +22,9 @@
 @property NSTimeInterval timeToLocation;
 @property CLLocation *userLocation;
 @property Pizzeria *mainPizzeria;
-@property (weak, nonatomic) IBOutlet UITextView *footerTextView;
+@property UITextView *footerTextView;
 @property NSString *ratingString;
-@property NSMutableArray *ratingArray;
-
+@property UILabel *foterLabel;
 
 @end
 
@@ -34,7 +33,8 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.pizzeriaArray = [NSMutableArray new];
-    self.ratingArray = [NSMutableArray new];
+    self.foterLabel = [UILabel new];
+//    self.ratingArray = [NSMutableArray new];
     [self loadUserLocation];
 
 }
@@ -47,7 +47,7 @@
 #pragma mark - UITableviewDelegate
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (self.pizzeriaArray.count < 4) {
-        return self.pizzeriaArray.count && self.ratingArray.count;
+        return self.pizzeriaArray.count;
     } else {
         return 4;
     }
@@ -57,7 +57,7 @@
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"Cell"];
     Pizzeria *pizzeria = [self.pizzeriaArray objectAtIndex:indexPath.row];
-    cell.textLabel.text = [NSString stringWithFormat:@"%@ Rating: %@", pizzeria.mapItem.name, self.ratingString];
+    cell.textLabel.text = [NSString stringWithFormat:@"%@", pizzeria.mapItem.name];
     cell.detailTextLabel.text = [NSString stringWithFormat:@"%.2f MI", pizzeria.locationDistance];
     return cell;
 }
@@ -67,15 +67,27 @@
 
     UIView *footer = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 3)];
     footer.backgroundColor = [UIColor colorWithRed:0.99 green:0.55 blue:0.31 alpha:1.00];
+//
+    self.footerTextView = [[UITextView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, tableView.tableFooterView.frame.size.height)];
+    self.footerTextView.backgroundColor = [UIColor clearColor];
+    self.footerTextView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    self.footerTextView.textAlignment = NSTextAlignmentLeft;
+    self.footerTextView.textColor = [UIColor colorWithRed:0.99 green:0.55 blue:0.31 alpha:1.00];
+    self.footerTextView.font = [UIFont fontWithName:@"Avenir-Roman" size:14];
+    self.footerTextView.text = @"";
 
-    return footer;
+//
+    [self.footerTextView addSubview:footer];
+//    tableView.tableFooterView = footer;
+//
+//    NSLog(@"Footer: %@", footer.text);
+
+    return self.footerTextView;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    return 3;
+    return 200;
 }
-
-
 
 #pragma mark - CLLocationManagerDelegate
 - (void)loadUserLocation {
@@ -133,14 +145,12 @@
             [self.pizzeriaArray addObject:self.mainPizzeria];
         }
 
-        for (Pizzeria *pizzerias in self.pizzeriaArray) {
-            [self getPizzaRating:(Pizzeria *)pizzerias];
-        }
         NSSortDescriptor *sort = [NSSortDescriptor sortDescriptorWithKey:@"locationDistance" ascending:YES];
         NSArray *sorted = [self.pizzeriaArray sortedArrayUsingDescriptors:[NSArray arrayWithObject:sort]];
         self.pizzeriaArray = [NSMutableArray arrayWithArray:sorted];
         [self.pizzaTableView reloadData];
         self.timeToLocation = 0;
+        self.directionSting = [NSMutableString string];
         [self getRoute:self.pizzeriaArray];
     }];
 }
@@ -158,17 +168,14 @@
     MKDirections *arrivalTime = [[MKDirections alloc] initWithRequest:request];
     [arrivalTime calculateDirectionsWithCompletionHandler:^(MKDirectionsResponse *response, NSError *error) {
         NSArray *routes = response.routes;
-        self.directionSting = [NSMutableString string];
-
         for (MKRoute *route in routes) {
             self.timeToLocation = self.timeToLocation +  (route.expectedTravelTime/60);
-            NSString *message = [NSString stringWithFormat:@"Arriving at %@ in approximately %.0f minutes.\n", second.name, self.timeToLocation];
+            NSString *message = [NSString stringWithFormat:@"Arriving at %@ in approximately %.0f minutes.\n\n", second.name, self.timeToLocation];
             NSLog(@"%@", message);
             [self.directionSting appendString:message];
+            self.footerTextView.text = self.directionSting;
         }
         self.timeToLocation = self.timeToLocation + 50;
-        self.footerTextView.text = self.directionSting;
-
     }];
 }
 
@@ -193,34 +200,6 @@
     for (MKRoute *route in response.routes) {
         NSLog(@"directions: %@", route.steps);
     }
-}
-
-
-- (void)getPizzaRating:(Pizzeria *)pizzeria {
-    NSString *urlString =[NSString stringWithFormat:@"https://maps.googleapis.com/maps/api/place/search/json?location=%f,%f&radius=100&types=food&sensor=false&key=AIzaSyArPvnhx4BUiKnrYG6cyNX-YZL21LruNAQ",  pizzeria.placemark.location.coordinate.latitude,  pizzeria.placemark.location.coordinate.longitude];
-
-    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:urlString]];
-
-    [NSURLConnection sendAsynchronousRequest: request queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
-        NSDictionary *results = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil];
-        NSArray *resultsArray = results[@"results"];
-        NSLog(@"%@", resultsArray);
-        NSDictionary *selectedResults = resultsArray.firstObject;
-        NSString *urlStringWithID =[NSString stringWithFormat:@"https://maps.googleapis.com/maps/api/place/details/json?placeid=%@&key=AIzaSyArPvnhx4BUiKnrYG6cyNX-YZL21LruNAQ", selectedResults[@"place_id"]];
-
-        NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:urlStringWithID]];
-
-        [NSURLConnection sendAsynchronousRequest: request queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
-            NSDictionary *results = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil];
-            NSNumber *rating = results[@"result"][@"rating"];
-            self.ratingString = [NSString stringWithFormat:@"%@", rating];
-            [self.ratingArray addObject:self.ratingString];
-            NSLog(@"%@", self.ratingString);
-            [self.pizzaTableView reloadData];
-
-        }];
-        
-    }];
 }
 
 #pragma mark - Actions
